@@ -1,4 +1,6 @@
-/* \author Geoffrey Biggs */
+/*
+ * Title: PCL & OpenNI Experimentation
+ */
 
 
 #include <iostream>
@@ -119,6 +121,8 @@ void printUsage (const char* progName)
             << "-------------------------------------------\n"
             << "-h           this help\n"
             << "-k           Source auto steaming data from Kinect\n"
+            << "-filter		 Filters the inputted PCD file\n"
+            << "-hullCalc	 Builds a convex hull from the inputted PCD file and calculates area & volume\n"
             << "-f [file]    Visualize the specified source file\n"
             << "\n\n";
 }
@@ -231,6 +235,7 @@ int main (int argc, char** argv)
 	}
 	else if (pcl::console::find_argument (argc, argv, "-f") >= 0)
 	{
+		// Assume the file path is the last argument
 		std::string inputfile = argv[argc - 1];
 		std::cout << "Mode: Visualize Static PCD File " << inputfile << "\n";
 		
@@ -240,11 +245,15 @@ int main (int argc, char** argv)
 			return (-1);
 		}
 		
-		// Filter out non-geometric coordinates in the cloud
-		filterInvalidPoints(point_cloud_ptr);
-
-		// Experimentation: Build a convex hull to approximate area and volume
-		buildConvexHull(point_cloud_ptr);
+		if (pcl::console::find_argument (argc, argv, "-filter") >= 0) {
+			// Filter out non-geometric coordinates in the cloud
+			filterInvalidPoints(point_cloud_ptr);
+		}
+		
+		if (pcl::console::find_argument (argc, argv, "-hullCalc") >= 0) {
+			// Experimentation: Build a convex hull to approximate area and volume
+			buildConvexHull(point_cloud_ptr);
+		}
 
 		main_viewer->updatePointCloud(point_cloud_ptr, "sCloud");
 		std::cout << "Successful read of " << inputfile << ".\n";
