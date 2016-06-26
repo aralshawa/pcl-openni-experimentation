@@ -18,6 +18,9 @@
 #include <pcl/common/transforms.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/project_inliers.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/surface/convex_hull.h>
+#include <pcl/ModelCoefficients.h>
 
 
 using namespace pcl;
@@ -38,16 +41,14 @@ int border_size = 1;
 
 boost::shared_ptr<pcl::visualization::PCLVisualizer> simpleVis (pcl::PointCloud<pcl::PointXYZ>::ConstPtr cloud)
 {
-  // --------------------------------------------
-  // -----Open 3D viewer and add point cloud-----
-  // --------------------------------------------
+  // Open 3D viewer and add point cloud
   boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
   viewer->setBackgroundColor (0, 0, 0);
   viewer->addPointCloud<pcl::PointXYZ> (cloud, "sCloud");
   viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "sCloud");
   viewer->addCoordinateSystem (1.0);
   viewer->initCameraParameters ();
-  return (viewer);
+  return viewer;
 }
 
 boost::shared_ptr<pcl::visualization::PCLVisualizer> rgbVis (pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr cloud)
@@ -59,7 +60,7 @@ boost::shared_ptr<pcl::visualization::PCLVisualizer> rgbVis (pcl::PointCloud<pcl
   viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "sCloud");
 //   viewer->addCoordinateSystem (1.f);
   viewer->initCameraParameters ();
-  return (viewer);
+  return viewer;
 }
 
 boost::shared_ptr<pcl::visualization::PCLVisualizer> initializedViewer ()
@@ -144,6 +145,65 @@ void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
 	}
 }
 
+void filterInvalidPoints(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr source_cloud)
+{
+	std::cerr << "PointCloud BEFORE filtering has: " << source_cloud->points.size () << " data points." << std::endl;
+
+	// Build a filter to remove spurious NaNs
+	pcl::PassThrough<pcl::PointXYZRGBA> pass;
+	pass.setInputCloud (source_cloud);
+	pass.setFilterFieldName ("z");
+	pass.setFilterLimits (0, 1.1);
+	pass.filter (*source_cloud);
+	
+	std::cerr << "PointCloud AFTER filtering has: " << source_cloud->points.size () << " data points." << std::endl;
+}
+
+void buildConvexHull(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
+{
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered (cloud);
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_projected (new pcl::PointCloud<pcl::PointXYZRGBA>);
+	
+	pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
+	pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
+	// Create the segmentation object
+	pcl::SACSegmentation<pcl::PointXYZRGBA> seg;
+	// Optional
+	seg.setOptimizeCoefficients (true);
+	// Mandatory
+	seg.setModelType (pcl::SACMODEL_PLANE);
+	seg.setMethodType (pcl::SAC_RANSAC);
+	seg.setDistanceThreshold (0.01);
+
+	seg.setInputCloud (cloud_filtered);
+	seg.segment (*inliers, *coefficients);
+	std::cerr << "PointCloud after segmentation has: " << inliers->indices.size () << " inliers." << std::endl;
+
+	// Project the model inliers
+	pcl::ProjectInliers<pcl::PointXYZRGBA> proj;
+	proj.setModelType (pcl::SACMODEL_PLANE);
+	proj.setIndices (inliers);
+	proj.setInputCloud (cloud_filtered);
+	proj.setModelCoefficients (coefficients);
+	proj.filter (*cloud_projected);
+	std::cerr << "PointCloud after projection has: " << cloud_projected->points.size () << " data points." << std::endl;
+
+	// Create a ConvexHull Hull representation of the projected inliers
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_hull (new pcl::PointCloud<pcl::PointXYZRGBA>);
+	pcl::ConvexHull<pcl::PointXYZRGBA> chull;
+	chull.setInputCloud (cloud_projected);
+	chull.setComputeAreaVolume(true);
+	chull.setDimension(3);
+	//chull.setAlpha (0.1); // Only applicable for Concave hulls
+	chull.reconstruct (*cloud_hull);
+
+	std::cerr << "ConvexHull hull has: " << cloud_hull->points.size () << " data points." << std::endl;
+	
+	std::cout << "Dimensionality = " << chull.getDimension() << "\n";
+	std::cout << "Area = " << chull.getTotalArea() << "\n";
+	std::cout << "Volume = " << chull.getTotalVolume() << "\n";
+}
+
 int main (int argc, char** argv)
 {
 	if (pcl::console::find_argument (argc, argv, "-h") >= 0)
@@ -180,6 +240,12 @@ int main (int argc, char** argv)
 			return (-1);
 		}
 		
+		// Filter out non-geometric coordinates in the cloud
+		filterInvalidPoints(point_cloud_ptr);
+
+		// Experimentation: Build a convex hull to approximate area and volume
+		buildConvexHull(point_cloud_ptr);
+
 		main_viewer->updatePointCloud(point_cloud_ptr, "sCloud");
 		std::cout << "Successful read of " << inputfile << ".\n";
 	}
