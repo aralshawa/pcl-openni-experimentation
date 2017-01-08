@@ -24,7 +24,6 @@
 #include <pcl/surface/convex_hull.h>
 #include <pcl/ModelCoefficients.h>
 
-
 using namespace pcl;
 
 pcl::PointCloud<pcl::PointXYZRGBA>::Ptr point_cloud_ptr (new pcl::PointCloud<pcl::PointXYZRGBA>);
@@ -93,12 +92,12 @@ void cloud_cb_ (const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr &cloud)
 		// Transform the cloud into the correct orientation
 		// Reference: http://pointclouds.org/documentation/tutorials/matrix_transform.php
 		float theta = M_PI; // The angle of rotation in radians
-		
+
 		Eigen::Affine3f transform = Eigen::Affine3f::Identity();
-		
+
 		// Theta radians arround Z axis
 		transform.rotate (Eigen::AngleAxisf (theta, Eigen::Vector3f::UnitZ()));
-		
+
 		// Executing the transformation
 		pcl::PointCloud<pcl::PointXYZRGBA>::Ptr transformed_cloud (new pcl::PointCloud<pcl::PointXYZRGBA> ());
 		pcl::transformPointCloud (*cloud, *transformed_cloud, transform);
@@ -127,16 +126,16 @@ void printUsage (const char* progName)
             << "\n\n";
 }
 
-int outputSequence = 9;
+int outputSequence = 0;
 void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
                             void* viewer_void)
 {
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = *static_cast<boost::shared_ptr<pcl::visualization::PCLVisualizer> *> (viewer_void);
-	
+
 	if (event.keyDown())
 	{
 		std::cout << "Pressed: '" << event.getKeySym() << "' \n";
-	
+
 		if (event.getKeySym() == "space")
 		{
 			//m.lock();
@@ -159,7 +158,7 @@ void filterInvalidPoints(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr source_cloud)
 	pass.setFilterFieldName ("z");
 	pass.setFilterLimits (0, 1.1);
 	pass.filter (*source_cloud);
-	
+
 	std::cerr << "PointCloud AFTER filtering has: " << source_cloud->points.size () << " data points." << std::endl;
 }
 
@@ -167,7 +166,7 @@ void buildConvexHull(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
 {
 	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered (cloud);
 	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_projected (new pcl::PointCloud<pcl::PointXYZRGBA>);
-	
+
 	pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
 	pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
 	// Create the segmentation object
@@ -202,7 +201,7 @@ void buildConvexHull(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
 	chull.reconstruct (*cloud_hull);
 
 	std::cerr << "ConvexHull hull has: " << cloud_hull->points.size () << " data points." << std::endl;
-	
+
 	std::cout << "Dimensionality = " << chull.getDimension() << "\n";
 	std::cout << "Area = " << chull.getTotalArea() << "\n";
 	std::cout << "Volume = " << chull.getTotalVolume() << "\n";
@@ -215,19 +214,19 @@ int main (int argc, char** argv)
 		printUsage(argv[0]);
 		return 0;
 	}
-	
-	
+
+
 	bool sensorStream = false;
 	//pcl::PointCloud<pcl::PointXYZRGBA>::Ptr point_cloud_ptr (new pcl::PointCloud<pcl::PointXYZRGBA>);
 	pcl::PointCloud<pcl::PointXYZRGBA>& point_cloud = *point_cloud_ptr;
-	
+
  	main_viewer = rgbVis(point_cloud_ptr);
 	main_viewer->registerKeyboardCallback (keyboardEventOccurred, (void*)&main_viewer);
-	
+
 	angular_resolution_x = pcl::deg2rad (angular_resolution_x);
   	angular_resolution_y = pcl::deg2rad (angular_resolution_y);
-  	
-  	
+
+
   	if (pcl::console::find_argument (argc, argv, "-k") >= 0)
 	{
 		std::cout << "Mode: Stream Data from Kinect Sensor\n";
@@ -238,18 +237,18 @@ int main (int argc, char** argv)
 		// Assume the file path is the last argument
 		std::string inputfile = argv[argc - 1];
 		std::cout << "Mode: Visualize Static PCD File " << inputfile << "\n";
-		
+
 		if (pcl::io::loadPCDFile<pcl::PointXYZRGBA> (inputfile, point_cloud) == -1)
 		{
 			PCL_ERROR("Couldn't read PCD file \n");
 			return (-1);
 		}
-		
+
 		if (pcl::console::find_argument (argc, argv, "-filter") >= 0) {
 			// Filter out non-geometric coordinates in the cloud
 			filterInvalidPoints(point_cloud_ptr);
 		}
-		
+
 		if (pcl::console::find_argument (argc, argv, "-hullCalc") >= 0) {
 			// Experimentation: Build a convex hull to approximate area and volume
 			buildConvexHull(point_cloud_ptr);
@@ -258,7 +257,7 @@ int main (int argc, char** argv)
 		main_viewer->updatePointCloud(point_cloud_ptr, "sCloud");
 		std::cout << "Successful read of " << inputfile << ".\n";
 	}
-  	
+
   	// TEMP: Build Static Cloud for Range Image
   	for (float x=-0.5f; x<=0.5f; x+=0.01f)
     {
@@ -269,31 +268,29 @@ int main (int argc, char** argv)
       }
     }
     point_cloud.width = (int) point_cloud.points.size ();  point_cloud.height = 1;
-	
+
 	boost::shared_ptr<pcl::RangeImage> range_image_ptr(new pcl::RangeImage);
-	pcl::RangeImage& range_image = *range_image_ptr;   
+	pcl::RangeImage& range_image = *range_image_ptr;
 	range_image.createFromPointCloud (point_cloud, angular_resolution_x, angular_resolution_y,
 									pcl::deg2rad (360.0f), pcl::deg2rad (180.0f),
 									scene_sensor_pose, coordinate_frame, noise_level, min_range, border_size);
-	
+
 	// ....
-	// main_viewer = initializedViewer();
-// 	pcl::visualization::PCLVisualizer viewer = *main_viewer;
-//   	
-// 	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointWithRange> range_image_color_handler (range_image_ptr, 0, 0, 0);
-// 	viewer.addPointCloud (range_image_ptr, range_image_color_handler, "range image");
-// 	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "range image");
-	//viewer.addCoordinateSystem (1.0f, "global");
-	//pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGBA> point_cloud_color_handler (point_cloud_ptr, 150, 150, 150);
-	//viewer.addPointCloud (point_cloud_ptr, point_cloud_color_handler, "original point cloud");
-	
-// 	setViewerPose(viewer, range_image.getTransformationToWorldSystem ());
+  // main_viewer = initializedViewer();
+  // pcl::visualization::PCLVisualizer viewer = *main_viewer;
+  // pcl::visualization::PointCloudColorHandlerCustom<pcl::PointWithRange> range_image_color_handler (range_image_ptr, 0, 0, 0);
+  // viewer.addPointCloud (range_image_ptr, range_image_color_handler, "range image");
+  // viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "range image");
+  // viewer.addCoordinateSystem (1.0f, "global");
+  // pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGBA> point_cloud_color_handler (point_cloud_ptr, 150, 150, 150);
+  // viewer.addPointCloud (point_cloud_ptr, point_cloud_color_handler, "original point cloud");
+  // 	setViewerPose(viewer, range_image.getTransformationToWorldSystem ());
 	// ....
-	
+
 	pcl::visualization::RangeImageVisualizer range_image_widget("Range Image");
 	range_image_widget.showRangeImage(range_image);
-	
-	
+
+
 	if (sensorStream) {
 		pcl::Grabber* interface;
 		try {
@@ -328,7 +325,7 @@ int main (int argc, char** argv)
 												scene_sensor_pose, pcl::RangeImage::LASER_FRAME, noise_level, min_range, border_size);
 				range_image_widget.showRangeImage(range_image);
 			}
-		
+
 			m.unlock();
 			boost::this_thread::sleep (boost::posix_time::microseconds (100));
 		}
