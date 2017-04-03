@@ -26,10 +26,12 @@
 
 using namespace pcl;
 
+// Pointer to the point cloud being manipulated, the viewer for the cloud, and respective mutex
 pcl::PointCloud<pcl::PointXYZRGBA>::Ptr point_cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGBA>);
 boost::shared_ptr<pcl::visualization::PCLVisualizer> main_viewer;
 std::mutex m;
 
+// RangeImage Configration and Parameters
 float angular_resolution_x = 0.5f,
       angular_resolution_y = angular_resolution_x;
 pcl::RangeImage::CoordinateFrame coordinate_frame = pcl::RangeImage::CAMERA_FRAME;
@@ -39,6 +41,49 @@ Eigen::Affine3f scene_sensor_pose(Eigen::Affine3f::Identity());
 float noise_level = 0.0;
 float min_range = 0.0f;
 int border_size = 1;
+
+
+/*
+ * Command Line Usage & Keyboard Events
+ */
+
+void printUsage(const char* progName)
+{
+  std::cout << "\n\nUsage: " << progName << " [options]\n\n"
+            << "Options:\n"
+            << "-------------------------------------------\n"
+            << "-h         This help\n"
+            << "-s         Source auto steaming data from the first connected sensor\n"
+            << "-filter		 Filters the inputted PCD file\n"
+            << "-hullCalc	 Builds a convex hull from the inputted PCD file and calculates area & volume\n"
+            << "-f [file]  Visualize the specified source file\n"
+            << "\n\n";
+}
+
+int outputSequence = 0;
+void keyboardEventOccurred(const pcl::visualization::KeyboardEvent &event, void* viewer_void)
+{
+  boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = *static_cast<boost::shared_ptr<pcl::visualization::PCLVisualizer> *>(viewer_void);
+
+  if (event.keyDown()) {
+    std::cout << "Pressed: '" << event.getKeySym() << "' \n";
+
+    if (event.getKeySym() == "space") {
+      //m.lock();
+      std::string outputFileName = "outputCloud" + std::to_string(outputSequence) + ".pcd";
+      pcl::io::savePCDFileASCII(outputFileName, *point_cloud_ptr);
+      outputSequence++;
+      std::cout << "Writing '" << outputFileName << "' ... \n";
+      //m.unlock();
+    }
+  }
+}
+
+
+/*
+ * Visualization Utilities
+ * Builds a PCLVisualizer for the respective PointCloud.
+ */
 
 boost::shared_ptr<pcl::visualization::PCLVisualizer> simpleVis(pcl::PointCloud<pcl::PointXYZ>::ConstPtr cloud)
 {
@@ -82,7 +127,12 @@ void setViewerPose(pcl::visualization::PCLVisualizer& viewer, const Eigen::Affin
                            up_vector[0], up_vector[1], up_vector[2]);
 }
 
-// Grabber point cloud callback
+
+/*
+ * Grabber Point Cloud Callback
+ * The callback used when new sensor data is avaiable from the streamer.
+ */
+
 void cloud_cb_(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr &cloud)
 {
   m.lock();
@@ -105,44 +155,18 @@ void cloud_cb_(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr &cloud)
 
     // Update the viewer's point cloud
     // NOTE: This cannot be done at the same time as the "spin" renderer
-    //		 Protect against a collision via a mutex
+    //		   Protect against a collision via a mutex
     // Reference: http://stackoverflow.com/questions/9003239/stream-of-cloud-point-visualization-using-pcl
     main_viewer->updatePointCloud(transformed_cloud, "sCloud");
   }
   m.unlock();
 }
 
-void printUsage(const char* progName)
-{
-  std::cout << "\n\nUsage: " << progName << " [options]\n\n"
-            << "Options:\n"
-            << "-------------------------------------------\n"
-            << "-h         This help\n"
-            << "-s         Source auto steaming data from the first connected sensor\n"
-            << "-filter		 Filters the inputted PCD file\n"
-            << "-hullCalc	 Builds a convex hull from the inputted PCD file and calculates area & volume\n"
-            << "-f [file]  Visualize the specified source file\n"
-            << "\n\n";
-}
 
-int outputSequence = 0;
-void keyboardEventOccurred(const pcl::visualization::KeyboardEvent &event, void* viewer_void)
-{
-  boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = *static_cast<boost::shared_ptr<pcl::visualization::PCLVisualizer> *>(viewer_void);
-
-  if (event.keyDown()) {
-    std::cout << "Pressed: '" << event.getKeySym() << "' \n";
-
-    if (event.getKeySym() == "space") {
-      //m.lock();
-      std::string outputFileName = "outputCloud" + std::to_string(outputSequence) + ".pcd";
-      pcl::io::savePCDFileASCII(outputFileName, *point_cloud_ptr);
-      outputSequence++;
-      std::cout << "Writing '" << outputFileName << "' ... \n";
-      //m.unlock();
-    }
-  }
-}
+/*
+ * Point Cloud Mutation & Analysis
+ * Filtering and convex hull utilities.
+ */
 
 void filterInvalidPoints(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr source_cloud)
 {
@@ -203,6 +227,11 @@ void buildConvexHull(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
   std::cout << "Volume = " << chull.getTotalVolume() << "\n";
 }
 
+
+/*
+ * MAIN
+ */
+
 int main(int argc, char** argv)
 {
   if(pcl::console::find_argument(argc, argv, "-h") >= 0) {
@@ -210,20 +239,18 @@ int main(int argc, char** argv)
     return 0;
   }
 
+  // By default, do not attempt to stream data from the sensor.
   bool sensorStream = false;
-  //pcl::PointCloud<pcl::PointXYZRGBA>::Ptr point_cloud_ptr (new pcl::PointCloud<pcl::PointXYZRGBA>);
+
+  // Build the main viewer and register the keyboard callback
   pcl::PointCloud<pcl::PointXYZRGBA>& point_cloud = *point_cloud_ptr;
-
   main_viewer = rgbVis(point_cloud_ptr);
-  main_viewer->registerKeyboardCallback (keyboardEventOccurred, (void*)&main_viewer);
+  main_viewer->registerKeyboardCallback(keyboardEventOccurred, (void*)&main_viewer);
 
-  angular_resolution_x = pcl::deg2rad (angular_resolution_x);
-  angular_resolution_y = pcl::deg2rad (angular_resolution_y);
-
-
+  // Command line agruments
   if (pcl::console::find_argument(argc, argv, "-k") >= 0)
   {
-    std::cout << "Mode: Stream Data from Kinect Sensor\n";
+    std::cout << "Mode: Stream Data from depth sensor\n";
     sensorStream = true;
   }
   else if (pcl::console::find_argument(argc, argv, "-f") >= 0)
@@ -252,7 +279,8 @@ int main(int argc, char** argv)
     std::cout << "Successful read of " << inputfile << ".\n";
   }
 
-  // TEMP: Build Static Cloud for Range Image
+  // Range Imaging
+  // Build Static Cloud for Range Image
   for (float x=-0.5f; x<=0.5f; x+=0.01f)
   {
     for (float y=-0.5f; y<=0.5f; y+=0.01f)
@@ -263,6 +291,9 @@ int main(int argc, char** argv)
   }
   point_cloud.width = (int)point_cloud.points.size();
   point_cloud.height = 1;
+
+  angular_resolution_x = pcl::deg2rad(angular_resolution_x);
+  angular_resolution_y = pcl::deg2rad(angular_resolution_y);
 
   boost::shared_ptr<pcl::RangeImage> range_image_ptr(new pcl::RangeImage);
   pcl::RangeImage& range_image = *range_image_ptr;
@@ -287,6 +318,7 @@ int main(int argc, char** argv)
 
 
   if (sensorStream) {
+    // Build the OpenNI grabber interface to steamer data from a connected depth sensor
     pcl::Grabber* interface;
 
     try {
@@ -302,31 +334,35 @@ int main(int argc, char** argv)
     boost::function<void (const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr&)> f = boost::bind(&::cloud_cb_, _1);
 
     interface->registerCallback(f);
-
     interface->start();
 
-    std::cout << "Starting... \n";
+    std::cout << "Starting stream...\n";
 
     while (!main_viewer->wasStopped())
     {
+      // Periodically refresh the main viewer
       m.lock();
       main_viewer->spinOnce(100);
       range_image_widget.spinOnce();
 
       if (live_update) {
+        // If live updating of the RangeImage is enabled, refresh it
         scene_sensor_pose = main_viewer->getViewerPose();
         range_image.createFromPointCloud(point_cloud, angular_resolution_x, angular_resolution_y,
                                          pcl::deg2rad(360.0f), pcl::deg2rad(180.0f),
                                          scene_sensor_pose, pcl::RangeImage::LASER_FRAME, noise_level, min_range, border_size);
         range_image_widget.showRangeImage(range_image);
       }
-
       m.unlock();
+
       boost::this_thread::sleep(boost::posix_time::microseconds(100));
     }
 
     interface->stop();
   } else {
+    // If a sensor stream is not enabled, simply refresh the main viewer visualizing a static point cloud
+    // NOTE: It is possible to not enable streaming and not specify a PCL file, in which case, an empty
+    //        point cloud will be rendered.
     while (!main_viewer->wasStopped()) {
       main_viewer->spinOnce(100);
       boost::this_thread::sleep(boost::posix_time::microseconds(100));

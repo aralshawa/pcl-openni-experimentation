@@ -1,12 +1,16 @@
-cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8 FATAL_ERROR)
 
-project(openni_grabber)
+PROJECT(openni_grabber)
 
-find_package(PCL 1.2 REQUIRED)
+FIND_PACKAGE(PCL 1.2 REQUIRED)
 
-include_directories(${PCL_INCLUDE_DIRS})
-link_directories(${PCL_LIBRARY_DIRS})
-add_definitions(${PCL_DEFINITIONS})
+INCLUDE_DIRECTORIES(${PCL_INCLUDE_DIRS})
+LINK_DIRECTORIES(${PCL_LIBRARY_DIRS})
+ADD_DEFINITIONS(${PCL_DEFINITIONS})
+ADD_DEFINITIONS(-pthread -std=c++11)
 
-add_executable (openni_viewer openni_viewer.cpp)
-target_link_libraries (openni_viewer ${PCL_LIBRARIES})
+ADD_EXECUTABLE(openni_viewer openni_viewer.cpp)
+TARGET_LINK_LIBRARIES(openni_viewer ${PCL_LIBRARIES})
+
+IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+ENDIF()
