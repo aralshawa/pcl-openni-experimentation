@@ -75,6 +75,8 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent &event, void*
       outputSequence++;
       std::cout << "Writing '" << outputFileName << "' ... \n";
       //m.unlock();
+    } else if (event.getKeySym() == "q") {
+      main_viewer->close();
     }
   }
 }
@@ -248,7 +250,7 @@ int main(int argc, char** argv)
   main_viewer->registerKeyboardCallback(keyboardEventOccurred, (void*)&main_viewer);
 
   // Command line agruments
-  if (pcl::console::find_argument(argc, argv, "-k") >= 0)
+  if (pcl::console::find_argument(argc, argv, "-s") >= 0)
   {
     std::cout << "Mode: Stream Data from depth sensor\n";
     sensorStream = true;
