@@ -3,7 +3,7 @@
 
 A simple playground for experimenting with the PCL library and OpenNI.
 
-Dependencies
+Key Dependencies
 ------------
 * [PCL](https://github.com/PointCloudLibrary/pcl) - An *uber* standalone library for handing 2D/3D image and point cloud processing.
 * [OpenNI](https://github.com/OpenNI/OpenNI) - An interfacing library for streaming point cloud data from physical OpenNI compliant sensors.
@@ -18,6 +18,24 @@ Command Line Arguments
 | `-f [file]` | O   | The path to a [PCD file](http://pointclouds.org/documentation/tutorials/pcd_file_format.php#pcd-file-format) to visualize. |
 | `-filter`   | O   | Attempts to filter noise & invalid points from the inputted point cloud file. |
 | `-hullCalc` | O   | *(Incomplete)* Builds a convex hull from the inputted PCD file and calculated surface area & volume. |
+
+**Notes:**
+* Pressing `space` during a stream will automatically package up the point cloud and output the PCD file into the execution directory.
+* The PCL viewer allows you to pan and rotate the point cloud.
+* A range image is built and visualized for PCD files inputted into the tool.
+
+Installation
+------------
+1. Clone the repo and install PCL with it's associated dependencies.
+2. Ensure [CMake](https://cmake.org) and [GNU Make](https://www.gnu.org/software/make/) are installed.
+2. Execute the following from within the root directory of the repository:
+```sh
+mkdir build     # Create a new build directory
+cd build
+cmake ..        # Resolve dependencies & generate the Makefile for the project
+make
+./openni_viewer
+```
 
 References
 ------------
